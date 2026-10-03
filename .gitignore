@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.ipynb_checkpoints/
+
+# index + model build trên Kaggle -> để trên HF Hub, không commit
+data/processed/dense*/
+models/
+results/*.json
+
+# dataset, video, model
+datasets/
+runs/
+*.pt
+*.onnx
+*.mp4
+*.mov
+data/frames/

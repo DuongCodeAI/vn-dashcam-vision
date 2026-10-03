@@ -1,0 +1,34 @@
+[project]
+name = "vn-dashcam-vision"
+version = "0.1.0"
+description = "Nhận diện biển báo giao thông Việt Nam từ camera hành trình (YOLO11n + CNN tự viết), chạy ONNX trên CPU"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Tiến Dương", email = "duongcodeai2@gmail.com" }]
+dependencies = ["numpy>=1.26"]
+
+[project.optional-dependencies]
+infer = ["onnxruntime>=1.18", "opencv-python-headless>=4.9"]
+app = ["streamlit>=1.35", "opencv-python-headless>=4.9", "onnxruntime>=1.18"]
+train = ["ultralytics>=8.3", "torch>=2.2", "torchvision", "opencv-python-headless>=4.9", "pyyaml"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
