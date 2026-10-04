@@ -124,5 +124,5 @@ Quay video thử: [docs/quay_video_xe_may.md](docs/quay_video_xe_may.md).
 ## Hạn chế
 
 - VNTS chủ yếu ảnh ban ngày; đêm/mưa phụ thuộc augmentation.
-- imgsz 640 để chạy được trên CPU; biển rất xa sẽ bị bỏ sót (960 tốt hơn nhưng chậm ~2.2 lần).
+- imgsz 640 để chạy được trên CPU; biển rất xa có thể bị bỏ sót. 960 sẽ chậm hơn ~2.25 lần (ước theo diện tích ảnh, chưa đo).
 - Ultralytics (dùng để train) là AGPL-3.0.
