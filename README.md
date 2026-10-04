@@ -12,12 +12,21 @@ video ─► YOLO11n (1 lớp "biển báo") ─► crop 64x64 ─► SignNet (C
 
 ## Kết quả
 
-> Chưa chạy. Các bảng dưới sẽ được điền bằng số thật sau khi chạy notebook trên Kaggle.
+Dataset: [VNTS](https://www.kaggle.com/datasets/maitam/vietnamese-traffic-signs) (3.216 ảnh, 52 lớp đặt tên theo mã QCVN, CC BY-SA 4.0).
+Giữ nguyên file chia train/test của dataset (2.552 / 639 ảnh), tách 10% train làm val. Test có 1.645 biển.
 
-Dataset: [VNTS](https://www.kaggle.com/datasets/maitam/vietnamese-traffic-signs) (3.216 ảnh, 52 lớp đặt tên theo mã QCVN, CC BY-SA 4.0),
-chia train/val/test theo nhóm video để không rò rỉ frame gần giống nhau.
+**Detector** (notebook 01, Colab T4, imgsz 640, mỗi detector giới hạn ~20 phút train):
 
-**1 tầng vs 2 tầng** (test VNTS, mAP@0.5, tốc độ trên CPU 4 luồng):
+| detector | epoch | mAP@0.5 test | mAP@0.5:0.95 test |
+|---|---|---|---|
+| YOLO11n 1 lớp "biển báo" | 19 | 0.986 | 0.752 |
+| YOLO11n 52 lớp | 11 | 0.876 | 0.624 |
+
+Cùng ngân sách thời gian, detector 1 lớp gần như không bỏ sót biển; detector 52 lớp phải vừa tìm vừa phân loại
+nên thấp hơn 11 điểm mAP@0.5. Phần phân loại được dồn sang SignNet ở bảng dưới.
+Bản 52 lớp chỉ được 11 epoch vì cache ảnh ra đĩa (chậm hơn RAM ~1.5 lần, xem phần "Sự cố").
+
+**1 tầng vs 2 tầng** (test VNTS, mAP@0.5, tốc độ trên CPU 4 luồng). *Đang chạy notebook 03, số sẽ điền khi xong.*
 
 | hệ thống | mAP@0.5 | mAP@0.5 lớp hiếm (<50 mẫu) | ms/ảnh |
 |---|---|---|---|
@@ -26,27 +35,39 @@ chia train/val/test theo nhóm video để không rò rỉ frame gần giống n
 | YOLO11n 1 lớp + SignNet, fp32 | | | |
 | YOLO11n 1 lớp + SignNet, int8 | | | |
 
-**SignNet với các cách xử lý lệch lớp** (crop test):
+**SignNet với các cách xử lý lệch lớp** (notebook 02, 1.645 crop test, 22 lớp hiếm có < 50 crop train;
+mỗi cấu hình 40 epoch, ~3 phút trên T4):
 
 | cấu hình | accuracy | macro-F1 | recall lớp hiếm |
 |---|---|---|---|
-| cross-entropy thường | | | |
-| + sampler căn bậc 2 tần suất | | | |
-| + sampler + loss trọng số "effective number" | | | |
+| cross-entropy thường | 0.992 | 0.970 | 0.930 |
+| + sampler căn bậc 2 tần suất | 0.991 | **0.985** | 0.967 |
+| + sampler + loss trọng số "effective number" | 0.978 | 0.964 | **0.981** |
 
-**Đường thật nhìn từ xe máy** (video tự quay, ~300-500 frame có nhãn):
+Accuracy gần như không đổi vì bị lớp đông (P.130 có 765 crop) áp đảo; khác biệt nằm ở macro-F1 và lớp hiếm.
+Sampler căn bậc 2 cho macro-F1 cao nhất nên được chọn làm model chính. Thêm loss có trọng số kéo recall lớp hiếm
+lên 0.981 nhưng accuracy tụt 1.3 điểm: cộng trọng số lên cả loss lẫn sampler là bù lệch hai lần, model nghiêng
+quá tay về lớp hiếm.
+Lỗi còn lại chủ yếu là **biển tốc độ** (P.127 40/60/80 nhầm nhau, chỉ khác con số) và W.203c → W.224.
+SignNet 1.19M tham số: ONNX fp32 4.7MB, int8 1.2MB.
 
-| nhóm | 1 tầng | 2 tầng |
-|---|---|---|
-| tất cả | | |
-| ngày / đêm | | |
-| frame nét / nhoè | | |
+**Đường thật nhìn từ xe máy**: chưa làm. Notebook 04 cần video tự quay + gán nhãn ~300-500 frame
+([hướng dẫn quay](docs/quay_video_xe_may.md)); VNTS là ảnh dashcam ô tô nên đây là chỗ dễ tụt độ chính xác nhất.
+
+### Sự cố khi train (ghi lại để lần sau khỏi mất giờ GPU)
+
+- `cache="ram"` trên Colab free (12.7GB RAM): train xong detector 1 lớp thì **crash hết RAM ở bước validate cuối**,
+  vì cache ảnh train (~3.6GB) bị nhân theo số worker của dataloader. Đổi sang `cache="disk"` + `workers=2`
+  (Colab chỉ 2 nhân). Đánh đổi: đọc cache từ đĩa chậm hơn ~1.5 lần, nên detector 52 lớp chỉ được 11 epoch trong 18 phút.
+- Sau crash, `last.pt` đã bị ultralytics xoá optimizer (train xong rồi). Gọi `resume=True` với checkpoint này **không báo lỗi
+  mà âm thầm train mới bằng cấu hình mặc định** (batch 16, lật ngang 0.5...). Notebook giờ kiểm tra `optimizer is None`
+  để bỏ qua thay vì resume.
 
 ## Điểm đáng chú ý
 
 - **2 tầng thay vì YOLO 52 lớp**: biển ở xa chỉ ~15px trên ảnh 640px; crop rồi phóng lên 64x64 thì chi tiết
   (gạch chéo của P.130 vs P.131a, con số trên biển tốc độ) rõ hơn, và lớp hiếm dễ xử lý ở classifier.
-- **Lệch lớp**: P.130 hơn 1.000 mẫu, có lớp vài chục. Thử sampler, loss có trọng số và copy-paste crop lớp hiếm
+- **Lệch lớp**: P.130 có 765 crop train, 8 lớp dưới 16 crop (ít nhất 2). Thử sampler, loss có trọng số và copy-paste crop lớp hiếm
   lên ảnh nền khác (giữ nguyên nhãn gốc của ảnh nền).
 - **Không lật ngang ảnh** khi augment: "cấm rẽ trái" lật thành "cấm rẽ phải".
 - **Bỏ phiếu nhiều frame**: trung bình log-xác suất có trọng số theo điểm detector; frame nhoè ít tiếng nói hơn.
@@ -61,6 +82,7 @@ chia train/val/test theo nhóm video để không rò rỉ frame gần giống n
 ```bash
 pip install -e ".[infer]"
 # tải models/ từ HF Hub: detector_1cls(.int8).onnx, signnet(.int8).onnx, names.json
+# (04/10/2026: model của lần train này chưa lên HF vì tài khoản Colab dùng để train chưa có secret HF_TOKEN)
 pip install -e ".[app]" && streamlit run src/dashcam/app.py
 ```
 
