@@ -1,5 +1,14 @@
 # vn-dashcam-vision
 
+<!-- intro -->
+<p align="left">
+<img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"> <img src="https://img.shields.io/badge/YOLO11-00FFFF?style=for-the-badge&logo=yolo&logoColor=white" alt="YOLO11"> <img src="https://img.shields.io/badge/SignNet%20CNN-E74C3C?style=for-the-badge" alt="SignNet CNN"> <img src="https://img.shields.io/badge/ONNX%20int8-005CED?style=for-the-badge&logo=onnx&logoColor=white" alt="ONNX int8"> <a href="https://huggingface.co/hgdkakhs/vn-dashcam-vision"><img src="https://img.shields.io/badge/Hugging%20Face-FFD21E?style=for-the-badge&logo=huggingface&logoColor=white" alt="Hugging Face"></a>
+</p>
+
+> **Nhận diện 52 loại biển báo.** 2 tầng: YOLO11n 1 lớp tìm biển + CNN tự thiết kế (SignNet, 1.19M tham số) phân loại crop; tracker + bỏ phiếu nhiều frame; suy luận tự viết bằng numpy + onnxruntime. mAP@0.5 **0.962** so với 0.801 của YOLO 52 lớp (lớp hiếm 0.950 so với 0.769). Trên CPU laptop cả 2 tầng int8 ~80 ms/frame; int8 nhỏ hơn ~3 lần, nhanh hơn fp32 ~17% trên laptop nhưng không nhanh hơn trên CPU Colab. Sampler căn bậc 2 cho macro-F1 0.985. Chưa thử trên video xe máy.
+
+> Một phần của bộ 5 dự án [Trợ lý lái xe tiếng Việt chạy offline](https://github.com/DuongCodeAI) · tác giả: Tiến Dương
+
 Nhận diện **biển báo giao thông Việt Nam** từ camera hành trình, chạy trên CPU laptop (ONNX, không cần torch).
 Mỗi biển chỉ được "báo" một lần, sau khi nhiều frame liên tiếp đồng ý với nhau, để dùng cho trợ lý lái xe
 [viet-copilot](https://github.com/DuongCodeAI/viet-copilot): thấy biển "Cấm đỗ xe" thì tra luật ngay
