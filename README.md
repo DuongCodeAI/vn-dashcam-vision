@@ -22,18 +22,30 @@ Giữ nguyên file chia train/test của dataset (2.552 / 639 ảnh), tách 10% 
 | YOLO11n 1 lớp "biển báo" | 19 | 0.986 | 0.752 |
 | YOLO11n 52 lớp | 11 | 0.876 | 0.624 |
 
-Cùng ngân sách thời gian, detector 1 lớp gần như không bỏ sót biển; detector 52 lớp phải vừa tìm vừa phân loại
-nên thấp hơn 11 điểm mAP@0.5. Phần phân loại được dồn sang SignNet ở bảng dưới.
+Hai số này đo hai việc khác nhau (1 lớp chỉ cần tìm đúng chỗ có biển, 52 lớp phải tìm và gọi đúng tên),
+nên không so trực tiếp được; so sánh công bằng là bảng 1 tầng vs 2 tầng bên dưới.
 Bản 52 lớp chỉ được 11 epoch vì cache ảnh ra đĩa (chậm hơn RAM ~1.5 lần, xem phần "Sự cố").
 
-**1 tầng vs 2 tầng** (test VNTS, mAP@0.5, tốc độ trên CPU 4 luồng). *Đang chạy notebook 03, số sẽ điền khi xong.*
+**1 tầng vs 2 tầng** (notebook 03: 300 ảnh test đầu tiên, mAP@0.5 tính bằng code tự viết trong `map_eval.py`,
+ms/ảnh là cả pipeline detect + crop + phân loại, đo bằng onnxruntime trên CPU Colab Xeon 2.0GHz, 2 luồng):
 
 | hệ thống | mAP@0.5 | mAP@0.5 lớp hiếm (<50 mẫu) | ms/ảnh |
 |---|---|---|---|
-| YOLO11n 52 lớp, fp32 | | | |
-| YOLO11n 52 lớp, int8 | | | |
-| YOLO11n 1 lớp + SignNet, fp32 | | | |
-| YOLO11n 1 lớp + SignNet, int8 | | | |
+| YOLO11n 52 lớp, fp32 | 0.801 | 0.769 | 133 |
+| YOLO11n 52 lớp, int8 | 0.741 | 0.726 | 131 |
+| YOLO11n 1 lớp + SignNet, fp32 | **0.962** | 0.950 | 198 |
+| YOLO11n 1 lớp + SignNet, int8 | 0.945 | **0.955** | 182 |
+
+- **2 tầng hơn 1 tầng 16 điểm mAP@0.5** (0.962 vs 0.801), lớp hiếm hơn 18 điểm. Đổi lại chậm hơn ~50% vì mỗi biển
+  phải chạy thêm SignNet. ~200ms/ảnh trên 2 nhân Colab là ~5 ảnh/giây: chưa đủ xử lý 15 frame/giây
+  (video 30fps, viet-copilot lấy 1/2 frame), nên chạy thật phải bỏ thêm frame hoặc dùng CPU nhiều nhân hơn.
+- **Int8 trên CPU Colab gần như không nhanh hơn** (131 vs 133ms cho YOLO). Chưa kiểm tra nguyên nhân; nghi CPU
+  của runtime này không có lệnh int8 (VNNI) nên onnxruntime không tăng tốc được. Lợi ích chắc chắn là file nhỏ hơn
+  ~3 lần (detector 10.6 → 3.2MB, SignNet 4.7 → 1.2MB). Tốc độ trên CPU laptop chưa đo.
+- Int8 làm YOLO 52 lớp tụt 6 điểm nhưng 2 tầng chỉ tụt 1.7 điểm (lớp hiếm chênh 0.5 điểm, coi như không đổi).
+
+Số detector ở bảng này là lần train thứ 2 (runtime Colab mới, cùng cấu hình): test mAP@0.5 1 lớp 0.980, 52 lớp 0.875,
+gần như trùng lần 1 ở bảng trên (0.986 / 0.876).
 
 **SignNet với các cách xử lý lệch lớp** (notebook 02, 1.645 crop test, 22 lớp hiếm có < 50 crop train;
 mỗi cấu hình 40 epoch, ~3 phút trên T4):
