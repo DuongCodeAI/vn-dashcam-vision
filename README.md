@@ -51,7 +51,11 @@ ms/ảnh là cả pipeline detect + crop + phân loại, đo bằng onnxruntime 
   hoặc chạy 2 model song song trên 2 nhân. ~120ms/ảnh ≈ 8 ảnh/giây trên 1 nhân Colab.
 - **Int8 trên CPU Colab gần như không nhanh hơn** (131 vs 133ms cho YOLO). Chưa kiểm tra nguyên nhân; nghi CPU
   của runtime này không có lệnh int8 (VNNI) nên onnxruntime không tăng tốc được. Lợi ích chắc chắn là file nhỏ hơn
-  ~3 lần (detector 10.6 → 3.2MB, SignNet 4.7 → 1.2MB). Tốc độ trên CPU laptop chưa đo.
+  ~3 lần (detector 10.6 → 3.2MB, SignNet 4.7 → 1.2MB).
+- **Trên CPU laptop (Ryzen 5 5625U) int8 có nhanh hơn**: detector 1 lớp trên 1 frame 1280x720 (ảnh 640) 4 luồng
+  fp32 88 ms → int8 73 ms, 1 luồng 178 → 137 ms; SignNet cho 3 crop 9.1 → 5.1 ms (4 luồng). Cả 2 tầng ~80 ms/frame,
+  chạy 1 frame bỏ 1 frame là đủ cho camera 15-25 fps. Đo bằng frame nhiễu ngẫu nhiên, 30 lần, lấy trung vị
+  (thời gian detector không phụ thuộc nội dung ảnh; NMS với ít box là không đáng kể).
 - Int8 làm YOLO 52 lớp tụt 6 điểm nhưng 2 tầng chỉ tụt 1.7 điểm (lớp hiếm chênh 0.5 điểm, coi như không đổi).
 
 Số detector ở bảng này là lần train thứ 2 (runtime Colab mới, cùng cấu hình): test mAP@0.5 1 lớp 0.980, 52 lớp 0.875,
