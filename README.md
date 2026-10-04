@@ -44,6 +44,8 @@ ms/ảnh là cả pipeline detect + crop + phân loại, đo bằng onnxruntime 
   | 52 lớp fp32 / int8 | 0.838 / 0.819 | 117 / 116 |
   | 1 lớp + SignNet fp32 / int8 | 0.962 / 0.945 | 121 / 116 |
 
+  100 ảnh đầu chỉ chứa 19/52 lớp nên mAP ở bảng này kém tin cậy hơn bảng 300 ảnh (42 lớp). mAP 2 tầng trùng bảng
+  trên tới 3 chữ số là trùng hợp: đã kiểm tra AP từng lớp, hai lần tính khác nhau (0.96224 vs 0.96225).
   Với 1 luồng, thêm SignNet chỉ tốn ~4ms. Bản 2 luồng của 2 tầng chậm hẳn (198ms) có lẽ vì YOLO và SignNet là
   2 session onnxruntime, mỗi session 2 luồng, giành nhau 2 vCPU của Colab. Chạy thật nên để 1 luồng/session
   hoặc chạy 2 model song song trên 2 nhân. ~120ms/ảnh ≈ 8 ảnh/giây trên 1 nhân Colab.
