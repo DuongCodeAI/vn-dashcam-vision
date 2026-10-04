@@ -74,7 +74,8 @@ for frame in frames:
 
 Train lại: `notebooks/01` (detector, T4) → `02` (SignNet) → `03` (quantize + so sánh, CPU) → `04` (video xe máy).
 Chạy trên Colab: mở notebook từ GitHub (File → Open notebook → GitHub → DuongCodeAI/vn-dashcam-vision), chọn T4 GPU
-(03, 04 để CPU), thêm Secrets `KAGGLE_USERNAME`, `KAGGLE_KEY` (tải VNTS bằng kaggle CLI) và `HF_TOKEN`.
+(03 chạy tiếp trên cùng runtime, chỉ dùng CPU). VNTS tải bằng `kagglehub`, không cần tài khoản Kaggle;
+Secret `HF_TOKEN` (tuỳ chọn) để đẩy model lên HF Hub của bạn.
 Output nằm trong Google Drive (`MyDrive/ai-portfolio/vn-dashcam-vision`) nên chạy lần lượt 01 → 04 là notebook sau tự tìm thấy.
 Quay video thử: [docs/quay_video_xe_may.md](docs/quay_video_xe_may.md).
 

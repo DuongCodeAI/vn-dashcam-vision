@@ -61,7 +61,28 @@ def calib_crop_inputs(npz: str, n: int = 500) -> list[np.ndarray]:
     return [normalize_batch(x[i:i + 1]) for i in range(len(x))]
 
 
-def quantize_static_int8(fp32: str, out: str, calib: list[np.ndarray]):
+def postprocess_nodes(model_path: str) -> list[str]:
+    """Các node sau Conv cuối của head (reshape, DFL, sigmoid, decode hộp, concat output) -> giữ fp32.
+
+    Output YOLO nối toạ độ hộp (0..640) với điểm lớp (0..1) vào một tensor. Lượng tử chung một scale
+    uint8 thì điểm lớp chỉ còn 0 hoặc ~2.5 -> int8 ra 0 detection (đã thử với yolo11n). Đi ngược từ
+    output, dừng ở Conv (trừ conv cố định của DFL); các Conv của head vẫn được quantize.
+    """
+    import onnx
+
+    g = onnx.load(model_path).graph
+    producer = {o: n for n in g.node for o in n.output}
+    todo, seen = [o.name for o in g.output], set()
+    while todo:
+        n = producer.get(todo.pop())
+        if n is None or n.name in seen or (n.op_type == "Conv" and "dfl" not in n.name):
+            continue
+        seen.add(n.name)
+        todo += list(n.input)
+    return sorted(seen)
+
+
+def quantize_static_int8(fp32: str, out: str, calib: list[np.ndarray], keep_head_fp32: bool = False):
     import onnxruntime as ort
     from onnxruntime.quantization import CalibrationMethod, QuantFormat, QuantType, quantize_static
     from onnxruntime.quantization.shape_inference import quant_pre_process
@@ -69,9 +90,10 @@ def quantize_static_int8(fp32: str, out: str, calib: list[np.ndarray]):
     pre = str(Path(out).with_suffix(".pre.onnx"))
     quant_pre_process(fp32, pre)
     name = ort.InferenceSession(fp32, providers=["CPUExecutionProvider"]).get_inputs()[0].name
+    exclude = postprocess_nodes(pre) if keep_head_fp32 else None
     quantize_static(pre, out, _ImageReader(name, calib), quant_format=QuantFormat.QDQ,
                     activation_type=QuantType.QUInt8, weight_type=QuantType.QInt8,
-                    calibrate_method=CalibrationMethod.MinMax, per_channel=True)
+                    calibrate_method=CalibrationMethod.MinMax, per_channel=True, nodes_to_exclude=exclude)
     Path(pre).unlink(missing_ok=True)
 
 
@@ -95,7 +117,7 @@ def main():
                                  calib_crop_inputs(args.calib_crops))
     for y in args.yolo:
         q = str(out / (Path(y).stem + ".int8.onnx"))
-        quantize_static_int8(y, q, calib_yolo_inputs(args.calib_images, args.imgsz))
+        quantize_static_int8(y, q, calib_yolo_inputs(args.calib_images, args.imgsz), keep_head_fp32=True)
     (out / "config.json").write_text(json.dumps({"imgsz": args.imgsz}), "utf-8")
     for p in sorted(out.glob("*.onnx")):
         print(p.name, f"{p.stat().st_size / 1e6:.1f} MB")

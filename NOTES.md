@@ -10,6 +10,8 @@
 ## Chia dữ liệu
 - Ảnh dashcam liên tiếp gần như giống hệt nhau. Chia ngẫu nhiên từng ảnh → test "đã thấy" lúc train → mAP đẹp giả.
   Dùng file split của dataset nếu có, không thì chia theo nhóm = tên file bỏ số thứ tự cuối.
+- VNTS chỉ có `split_dataset/train_files.txt` (2552) + `test_files.txt` (639), không có val → giữ nguyên test,
+  tách 10% train làm val (thiếu val thì ultralytics và train_classifier đều lỗi).
 
 ## 2 tầng
 - Tầng 1: YOLO11n 1 lớp. Chỉ cần học "có biển ở đây" → dữ liệu của mọi lớp dồn cho một việc.
@@ -39,6 +41,8 @@
   vì một vật không thể vừa là P.130 vừa là P.131a.
 - Int8: static quantization (QDQ, per-channel) với ~200 ảnh calibration. Dynamic quantization chỉ lượng tử
   trọng số nên Conv gần như không nhanh hơn.
+- YOLO int8: giữ fp32 phần hậu xử lý của head (DFL, decode hộp, concat output). Output nối toạ độ (0..640)
+  với điểm lớp (0..1); quantize chung một scale uint8 thì điểm lớp về 0 → thử với yolo11n ra 0 detection.
 
 ## Việc cần làm
 - Chạy notebook 01-03, điền bảng kết quả.

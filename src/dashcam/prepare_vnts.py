@@ -69,6 +69,17 @@ def read_split_lists(src: Path) -> dict[str, str] | None:
     return res or None
 
 
+def add_val(split: dict[str, str], stems: list[str], val: float = 0.1) -> dict[str, str]:
+    """VNTS chỉ có train_files.txt / test_files.txt (không có val) -> tách val từ phần train
+    theo nhóm, test giữ nguyên. Ảnh không nằm trong file split nào thì tính là train."""
+    by_group = split_by_group(stems, val=val, test=0.0)
+    out = {}
+    for s in stems:
+        sp = split.get(s, "train")
+        out[s] = "val" if sp == "train" and by_group[s] == "val" else sp
+    return out
+
+
 def read_labels(p: Path) -> list[tuple[int, float, float, float, float]]:
     rows = []
     if p.exists():
@@ -120,6 +131,9 @@ def main():
     if not split or not any(p.stem in split for p in images):
         split = split_by_group([p.stem for p in images])
         how = "nhóm theo tên file (tránh rò rỉ frame cùng video)"
+    elif "val" not in split.values():
+        split = add_val(split, [p.stem for p in images])
+        how += " (val tách 10% từ train)"
     print(f"{len(images)} ảnh, {len(names)} lớp, chia theo {how}")
 
     crops = defaultdict(lambda: ([], []))

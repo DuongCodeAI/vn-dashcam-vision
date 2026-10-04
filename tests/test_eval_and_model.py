@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from dashcam.map_eval import average_precision, map50
-from dashcam.prepare_vnts import group_key, split_by_group
+from dashcam.prepare_vnts import add_val, group_key, split_by_group
 
 
 def test_map_perfect_and_miss():
@@ -29,6 +29,15 @@ def test_group_split_keeps_video_together():
     assert group_key("video12_0007") == "video12"
 
 
+def test_add_val_keeps_test_and_carves_val_from_train():
+    stems = [f"{i:04d}" for i in range(1000)]
+    split = {s: "test" for s in stems[:200]} | {s: "train" for s in stems[200:990]}  # 10 ảnh không có trong file split
+    out = add_val(split, stems)
+    assert all(out[s] == "test" for s in stems[:200])
+    assert set(out.values()) == {"train", "val", "test"}
+    assert 40 < sum(v == "val" for v in out.values()) < 140
+
+
 def test_signnet_forward_and_weights():
     torch = pytest.importorskip("torch")
     from dashcam.classifier import SignNet, class_weights, count_params
@@ -46,3 +55,22 @@ def test_normalize_batch_shape():
 
     x = normalize_batch(np.zeros((3, 64, 64, 3), np.uint8))
     assert x.shape == (3, 3, 64, 64) and x.dtype == np.float32
+
+
+def test_postprocess_nodes_stops_at_conv(tmp_path):
+    onnx = pytest.importorskip("onnx")
+    from onnx import TensorProto, helper
+
+    from dashcam.export import postprocess_nodes
+
+    nodes = [helper.make_node("Conv", ["x", "w"], ["a"], name="/m.0/Conv"),
+             helper.make_node("Conv", ["a", "w"], ["b"], name="/m.23/cv3/Conv"),
+             helper.make_node("Sigmoid", ["b"], ["c"], name="/m.23/Sigmoid"),
+             helper.make_node("Softmax", ["a"], ["d"], name="/m.23/dfl/Softmax"),
+             helper.make_node("Conv", ["d", "w"], ["e"], name="/m.23/dfl/conv/Conv"),
+             helper.make_node("Concat", ["e", "c"], ["y"], name="/m.23/Concat", axis=1)]
+    vi = [helper.make_tensor_value_info(n, TensorProto.FLOAT, None) for n in ("x", "w", "y")]
+    g = helper.make_graph(nodes, "g", vi[:2], vi[2:])
+    p = tmp_path / "m.onnx"
+    onnx.save(helper.make_model(g), p)
+    assert postprocess_nodes(str(p)) == ["/m.23/Concat", "/m.23/Sigmoid", "/m.23/dfl/Softmax", "/m.23/dfl/conv/Conv"]

@@ -43,6 +43,13 @@ class CropDataset(Dataset):
         return img, int(self.y[i])
 
 
+def seed_worker(_):
+    # worker được fork từ tiến trình chính nên mang y nguyên self.rng -> mọi worker, mọi epoch lặp lại
+    # đúng một chuỗi phép augment. torch đổi seed worker mỗi epoch -> lấy seed đó tạo rng mới.
+    info = torch.utils.data.get_worker_info()
+    info.dataset.rng = np.random.default_rng(torch.initial_seed() % 2**32)
+
+
 def collate(batch):
     imgs = np.stack([b[0] for b in batch])
     return to_tensor(imgs), torch.tensor([b[1] for b in batch])
@@ -87,6 +94,7 @@ def main():
     ap.add_argument("--sampler", choices=["none", "sqrt"], default="sqrt")
     ap.add_argument("--weighted-loss", action="store_true")
     ap.add_argument("--workers", type=int, default=2)
+    ap.add_argument("--max-min", type=float, default=None, help="giới hạn cứng thời gian train (phút)")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -108,7 +116,7 @@ def main():
         w = 1.0 / np.sqrt(np.maximum(counts[ytr], 1))
         sampler = WeightedRandomSampler(torch.tensor(w, dtype=torch.double), num_samples=len(ytr), replacement=True)
     dl = DataLoader(ds, batch_size=args.bs, sampler=sampler, shuffle=sampler is None, collate_fn=collate,
-                    num_workers=args.workers, drop_last=True)
+                    num_workers=args.workers, drop_last=True, worker_init_fn=seed_worker)
     cw = class_weights(counts.tolist()).to(device) if args.weighted_loss else None
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=5e-4)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=args.lr, total_steps=args.epochs * len(dl))
@@ -130,6 +138,9 @@ def main():
         if m["macro_f1"] > best:
             best = m["macro_f1"]
             torch.save({"model": model.state_dict(), "names": names, "width": args.width}, out / "best.pt")
+        if args.max_min and time.time() - t0 > args.max_min * 60:
+            print(f"hết {args.max_min} phút, dừng ở epoch {ep + 1}")
+            break
     (out / "log.json").write_text(json.dumps(log, indent=1), "utf-8")
     print("best macro_f1", round(best, 4))
 

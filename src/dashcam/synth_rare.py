@@ -9,6 +9,7 @@ python -m dashcam.synth_rare --data datasets/vnts --rare 50 --per-class 150
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -33,7 +34,7 @@ def main():
     x, y = tr["x"], tr["y"]
     counts = np.bincount(y, minlength=len(names))
     rare = [c for c in range(len(names)) if 0 < counts[c] < args.rare]
-    bgs = sorted((root / "yolo_ncls" / "images" / "train").iterdir())
+    bgs = sorted(p for p in (root / "yolo_ncls" / "images" / "train").iterdir() if not p.name.startswith("synth_"))
     print(f"{len(rare)} lớp hiếm: {[names[c] for c in rare]}")
 
     n = 0
@@ -45,7 +46,8 @@ def main():
             if bg is None:
                 continue
             img, (cx, cy, w, h) = paste_sign(bg, x[rng.choice(pool)], rng)
-            stem = f"synth_{names[c]}_{n:05d}".replace(".", "_")
+            # tên lớp VNTS có "*" và dấu cách ("P.106a*Xe tải") -> không để vào tên file
+            stem = f"synth_{re.sub(r'[^0-9A-Za-z]+', '_', names[c])}_{n:05d}"
             for d, cls in (("yolo_ncls", c), ("yolo_1cls", 0)):
                 cv2.imwrite(str(root / d / "images" / "train" / f"{stem}.jpg"), img)
                 # PHẢI giữ nhãn gốc của ảnh nền: bỏ đi thì các biển có sẵn trong ảnh thành "nền",
