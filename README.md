@@ -103,8 +103,7 @@ SignNet 1.19M tham số: ONNX fp32 4.7MB, int8 1.2MB.
 
 ```bash
 pip install -e ".[infer]"
-# tải models/ từ HF Hub: detector_1cls(.int8).onnx, signnet(.int8).onnx, names.json
-# (04/10/2026: model của lần train này đang ở Google Drive, chưa lên HF vì tài khoản Colab dùng để train chưa có HF_TOKEN)
+# tải models/ từ HF Hub (https://huggingface.co/hgdkakhs/vn-dashcam-vision): detector_1cls(.int8).onnx, signnet(.int8).onnx, names.json
 pip install -e ".[app]" && streamlit run src/dashcam/app.py
 ```
 
