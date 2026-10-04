@@ -36,9 +36,17 @@ ms/ảnh là cả pipeline detect + crop + phân loại, đo bằng onnxruntime 
 | YOLO11n 1 lớp + SignNet, fp32 | **0.962** | 0.950 | 198 |
 | YOLO11n 1 lớp + SignNet, int8 | 0.945 | **0.955** | 182 |
 
-- **2 tầng hơn 1 tầng 16 điểm mAP@0.5** (0.962 vs 0.801), lớp hiếm hơn 18 điểm. Đổi lại chậm hơn ~50% vì mỗi biển
-  phải chạy thêm SignNet. ~200ms/ảnh trên 2 nhân Colab là ~5 ảnh/giây: chưa đủ xử lý 15 frame/giây
-  (video 30fps, viet-copilot lấy 1/2 frame), nên chạy thật phải bỏ thêm frame hoặc dùng CPU nhiều nhân hơn.
+- **2 tầng hơn 1 tầng 16 điểm mAP@0.5** (0.962 vs 0.801), lớp hiếm hơn 18 điểm.
+- Tốc độ phụ thuộc số luồng nhiều hơn số tầng. Đo lại với **1 luồng** (100 ảnh test đầu):
+
+  | hệ thống | mAP@0.5 | ms/ảnh |
+  |---|---|---|
+  | 52 lớp fp32 / int8 | 0.838 / 0.819 | 117 / 116 |
+  | 1 lớp + SignNet fp32 / int8 | 0.962 / 0.945 | 121 / 116 |
+
+  Với 1 luồng, thêm SignNet chỉ tốn ~4ms. Bản 2 luồng của 2 tầng chậm hẳn (198ms) có lẽ vì YOLO và SignNet là
+  2 session onnxruntime, mỗi session 2 luồng, giành nhau 2 vCPU của Colab. Chạy thật nên để 1 luồng/session
+  hoặc chạy 2 model song song trên 2 nhân. ~120ms/ảnh ≈ 8 ảnh/giây trên 1 nhân Colab.
 - **Int8 trên CPU Colab gần như không nhanh hơn** (131 vs 133ms cho YOLO). Chưa kiểm tra nguyên nhân; nghi CPU
   của runtime này không có lệnh int8 (VNNI) nên onnxruntime không tăng tốc được. Lợi ích chắc chắn là file nhỏ hơn
   ~3 lần (detector 10.6 → 3.2MB, SignNet 4.7 → 1.2MB). Tốc độ trên CPU laptop chưa đo.
