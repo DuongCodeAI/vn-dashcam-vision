@@ -1,28 +1,64 @@
 # vn-dashcam-vision
 
-<!-- intro -->
+[![ci](https://github.com/DuongCodeAI/vn-dashcam-vision/actions/workflows/ci.yml/badge.svg)](https://github.com/DuongCodeAI/vn-dashcam-vision/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+![python](https://img.shields.io/badge/python-3.10%2B-3776AB)
+
 <p align="left">
 <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"> <img src="https://img.shields.io/badge/YOLO11-00FFFF?style=for-the-badge&logo=yolo&logoColor=white" alt="YOLO11"> <img src="https://img.shields.io/badge/SignNet%20CNN-E74C3C?style=for-the-badge" alt="SignNet CNN"> <img src="https://img.shields.io/badge/ONNX%20int8-005CED?style=for-the-badge&logo=onnx&logoColor=white" alt="ONNX int8"> <a href="https://huggingface.co/hgdkakhs/vn-dashcam-vision"><img src="https://img.shields.io/badge/Hugging%20Face-FFD21E?style=for-the-badge&logo=huggingface&logoColor=white" alt="Hugging Face"></a>
 </p>
 
-> **Nhận diện 52 loại biển báo.** 2 tầng: YOLO11n 1 lớp tìm biển + CNN tự thiết kế (SignNet, 1.19M tham số) phân loại crop; tracker + bỏ phiếu nhiều frame; suy luận tự viết bằng numpy + onnxruntime. mAP@0.5 **0.962** so với 0.801 của YOLO 52 lớp (lớp hiếm 0.950 so với 0.769). Trên CPU laptop cả 2 tầng int8 ~80 ms/frame; int8 nhỏ hơn ~3 lần, nhanh hơn fp32 ~17% trên laptop nhưng không nhanh hơn trên CPU Colab. Sampler căn bậc 2 cho macro-F1 0.985. Chưa thử trên video xe máy.
+Nhận diện **52 loại biển báo giao thông Việt Nam** từ camera hành trình, chạy trên CPU laptop (ONNX, không cần torch).
 
-> Một phần của bộ 5 dự án [Trợ lý lái xe tiếng Việt chạy offline](https://github.com/DuongCodeAI) · tác giả: Tiến Dương
+> **English summary.** Two-stage traffic-sign recognition for Vietnamese dashcam video: a 1-class YOLO11n finds signs,
+> a small CNN I designed (SignNet, 1.19M params) classifies the crops, then a ByteTrack-style tracker + multi-frame voting
+> emits each sign once. mAP@0.5 0.962 vs 0.801 for a single 52-class YOLO (rare classes 0.950 vs 0.769). Inference
+> (letterbox, YOLO11 decode, NMS) is hand-written in numpy + onnxruntime; int8 runs ~80 ms/frame on a laptop CPU.
 
-Nhận diện **biển báo giao thông Việt Nam** từ camera hành trình, chạy trên CPU laptop (ONNX, không cần torch).
-Mỗi biển chỉ được "báo" một lần, sau khi nhiều frame liên tiếp đồng ý với nhau, để dùng cho trợ lý lái xe
-[viet-copilot](https://github.com/DuongCodeAI/viet-copilot): thấy biển "Cấm đỗ xe" thì tra luật ngay
-([vn-traffic-law-rag](https://github.com/DuongCodeAI/vn-traffic-law-rag)).
+Một phần của bộ 5 dự án [Trợ lý lái xe tiếng Việt chạy offline](https://github.com/DuongCodeAI) · tác giả: Tiến Dương.
+Mỗi biển chỉ được "báo" một lần, sau khi nhiều frame liên tiếp đồng ý với nhau, để [viet-copilot](https://github.com/DuongCodeAI/viet-copilot)
+thấy biển "Cấm đỗ xe" thì tra luật ngay ([vn-traffic-law-rag](https://github.com/DuongCodeAI/vn-traffic-law-rag)).
+
+## Kết quả chính
+
+| | kết quả | so với |
+|---|---|---|
+| mAP@0.5, 2 tầng (YOLO 1 lớp + SignNet) | **0.962** | YOLO11n 52 lớp: 0.801 |
+| mAP@0.5 lớp hiếm (< 50 mẫu train) | **0.950** | YOLO11n 52 lớp: 0.769 |
+| SignNet macro-F1 (sampler căn bậc 2) | **0.985** | cross-entropy thường: 0.970 |
+| tốc độ cả 2 tầng int8, CPU laptop | **~80 ms/frame** | đủ cho camera 15-25 fps nếu xử lý 1 frame bỏ 1 frame |
+| int8 so với fp32 | nhỏ hơn ~3 lần (detector 3.2 MB, SignNet 1.2 MB), nhanh hơn ~17% trên laptop | không nhanh hơn trên CPU Colab |
+
+Model: [hgdkakhs/vn-dashcam-vision](https://huggingface.co/hgdkakhs/vn-dashcam-vision). Số copy từ output notebook:
+[results/colab_2026-10-04.md](results/colab_2026-10-04.md).
+
+## Kiến trúc
 
 ```
 video ─► YOLO11n (1 lớp "biển báo") ─► crop 64x64 ─► SignNet (CNN tự thiết kế, 52 lớp QCVN 41)
       ─► tracker kiểu ByteTrack ─► bỏ phiếu nhiều frame ─► SignEvent{code: "P.131a", conf, track_id}
 ```
 
-## Kết quả
+- **2 tầng thay vì YOLO 52 lớp**: biển ở xa chỉ ~15px trên ảnh 640px; crop rồi phóng lên 64x64 thì chi tiết
+  (gạch chéo của P.130 vs P.131a, con số trên biển tốc độ) rõ hơn, và lớp hiếm dễ xử lý ở classifier.
+- **Lệch lớp**: P.130 có 765 crop train, 8 lớp dưới 16 crop (ít nhất 2). Thử sampler, loss có trọng số và copy-paste
+  crop lớp hiếm lên ảnh nền khác (giữ nguyên nhãn gốc của ảnh nền).
+- **Không lật ngang ảnh** khi augment: "cấm rẽ trái" lật thành "cấm rẽ phải".
+- **Bỏ phiếu nhiều frame**: trung bình log-xác suất có trọng số theo điểm detector; frame nhoè ít tiếng nói hơn.
+  Phát nhầm sự kiện = trợ lý nói sai luật cho tài xế, nên thà chậm vài trăm ms.
+- **Tracker giữ detection điểm thấp** (ý tưởng ByteTrack): biển bị nhoè do xe rung có score ~0.2,
+  bỏ đi là track đứt và phiếu bầu bị chia nhỏ.
+- **Suy luận tự viết bằng numpy + onnxruntime** (letterbox, decode YOLO11, NMS): không cần ultralytics/torch lúc chạy.
+- **Int8 bằng static quantization có calibration**: với CNN, quantize dynamic gần như không nhanh hơn. Phần hậu xử lý
+  của head YOLO giữ fp32, vì toạ độ (0..640) và điểm lớp (0..1) chung một scale uint8 thì điểm lớp về 0.
+
+Lý do của từng lựa chọn: [NOTES.md](NOTES.md).
+
+## Kết quả chi tiết
 
 Dataset: [VNTS](https://www.kaggle.com/datasets/maitam/vietnamese-traffic-signs) (3.216 ảnh, 52 lớp đặt tên theo mã QCVN, CC BY-SA 4.0).
 Giữ nguyên file chia train/test của dataset (2.552 / 639 ảnh), tách 10% train làm val. Test có 1.645 biển.
+Ảnh dashcam liên tiếp gần như giống nhau, nên chia ngẫu nhiên từng ảnh sẽ cho mAP đẹp giả.
 
 **Detector** (notebook 01, Colab T4, imgsz 640, mỗi detector giới hạn ~20 phút train):
 
@@ -33,7 +69,9 @@ Giữ nguyên file chia train/test của dataset (2.552 / 639 ảnh), tách 10% 
 
 Hai số này đo hai việc khác nhau (1 lớp chỉ cần tìm đúng chỗ có biển, 52 lớp phải tìm và gọi đúng tên),
 nên không so trực tiếp được; so sánh công bằng là bảng 1 tầng vs 2 tầng bên dưới.
-Bản 52 lớp chỉ được 11 epoch vì cache ảnh ra đĩa (chậm hơn RAM ~1.5 lần, xem phần "Sự cố").
+Bản 52 lớp chỉ được 11 epoch vì cache ảnh ra đĩa (chậm hơn RAM ~1.5 lần, xem "Sự cố khi train").
+Detector dùng ở bảng dưới là lần train thứ 2 (runtime Colab mới, cùng cấu hình): test mAP@0.5 1 lớp 0.980,
+52 lớp 0.875, gần như trùng lần 1.
 
 **1 tầng vs 2 tầng** (notebook 03: 300 ảnh test đầu tiên, mAP@0.5 tính bằng code tự viết trong `map_eval.py`,
 ms/ảnh là cả pipeline detect + crop + phân loại, đo bằng onnxruntime trên CPU Colab Xeon 2.0GHz, 2 luồng):
@@ -46,6 +84,7 @@ ms/ảnh là cả pipeline detect + crop + phân loại, đo bằng onnxruntime 
 | YOLO11n 1 lớp + SignNet, int8 | 0.945 | **0.955** | 182 |
 
 - **2 tầng hơn 1 tầng 16 điểm mAP@0.5** (0.962 vs 0.801), lớp hiếm hơn 18 điểm.
+- Int8 làm YOLO 52 lớp tụt 6 điểm nhưng 2 tầng chỉ tụt 1.7 điểm (lớp hiếm chênh 0.5 điểm, coi như không đổi).
 - Tốc độ phụ thuộc số luồng nhiều hơn số tầng. Đo lại với **1 luồng** (100 ảnh test đầu):
 
   | hệ thống | mAP@0.5 | ms/ảnh |
@@ -57,18 +96,13 @@ ms/ảnh là cả pipeline detect + crop + phân loại, đo bằng onnxruntime 
   trên tới 3 chữ số là trùng hợp: đã kiểm tra AP từng lớp, hai lần tính khác nhau (0.96224 vs 0.96225).
   Với 1 luồng, thêm SignNet chỉ tốn ~4ms. Bản 2 luồng của 2 tầng chậm hẳn (198ms) có lẽ vì YOLO và SignNet là
   2 session onnxruntime, mỗi session 2 luồng, giành nhau 2 vCPU của Colab. Chạy thật nên để 1 luồng/session
-  hoặc chạy 2 model song song trên 2 nhân. ~120ms/ảnh ≈ 8 ảnh/giây trên 1 nhân Colab.
+  hoặc chạy 2 model song song trên 2 nhân.
 - **Int8 trên CPU Colab gần như không nhanh hơn** (131 vs 133ms cho YOLO). Chưa kiểm tra nguyên nhân; nghi CPU
-  của runtime này không có lệnh int8 (VNNI) nên onnxruntime không tăng tốc được. Lợi ích chắc chắn là file nhỏ hơn
-  ~3 lần (detector 10.6 → 3.2MB, SignNet 4.7 → 1.2MB).
+  của runtime này không có lệnh int8 (VNNI) nên onnxruntime không tăng tốc được.
 - **Trên CPU laptop (Ryzen 5 5625U) int8 có nhanh hơn**: detector 1 lớp trên 1 frame 1280x720 (ảnh 640) 4 luồng
-  fp32 88 ms → int8 73 ms, 1 luồng 178 → 137 ms; SignNet cho 3 crop 9.1 → 5.1 ms (4 luồng). Cả 2 tầng ~80 ms/frame,
-  chạy 1 frame bỏ 1 frame là đủ cho camera 15-25 fps. Đo bằng frame nhiễu ngẫu nhiên, 30 lần, lấy trung vị
-  (thời gian detector không phụ thuộc nội dung ảnh; NMS với ít box là không đáng kể).
-- Int8 làm YOLO 52 lớp tụt 6 điểm nhưng 2 tầng chỉ tụt 1.7 điểm (lớp hiếm chênh 0.5 điểm, coi như không đổi).
-
-Số detector ở bảng này là lần train thứ 2 (runtime Colab mới, cùng cấu hình): test mAP@0.5 1 lớp 0.980, 52 lớp 0.875,
-gần như trùng lần 1 ở bảng trên (0.986 / 0.876).
+  fp32 88 ms → int8 73 ms, 1 luồng 178 → 137 ms; SignNet cho 3 crop 9.1 → 5.1 ms (4 luồng). Cả 2 tầng ~80 ms/frame.
+  Đo bằng frame nhiễu ngẫu nhiên, 30 lần, lấy trung vị (thời gian detector không phụ thuộc nội dung ảnh;
+  NMS với ít box là không đáng kể).
 
 **SignNet với các cách xử lý lệch lớp** (notebook 02, 1.645 crop test, 22 lớp hiếm có < 50 crop train;
 mỗi cấu hình 40 epoch, ~3 phút trên T4):
@@ -84,10 +118,6 @@ Sampler căn bậc 2 cho macro-F1 cao nhất nên được chọn làm model ch�
 lên 0.981 nhưng accuracy tụt 1.3 điểm: cộng trọng số lên cả loss lẫn sampler là bù lệch hai lần, model nghiêng
 quá tay về lớp hiếm.
 Lỗi còn lại chủ yếu là **biển tốc độ** (P.127 40/60/80 nhầm nhau, chỉ khác con số) và W.203c → W.224.
-SignNet 1.19M tham số: ONNX fp32 4.7MB, int8 1.2MB.
-
-**Đường thật nhìn từ xe máy**: chưa làm. Notebook 04 cần video tự quay + gán nhãn ~300-500 frame
-([hướng dẫn quay](docs/quay_video_xe_may.md)); VNTS là ảnh dashcam ô tô nên đây là chỗ dễ tụt độ chính xác nhất.
 
 ### Sự cố khi train (ghi lại để lần sau khỏi mất giờ GPU)
 
@@ -98,45 +128,47 @@ SignNet 1.19M tham số: ONNX fp32 4.7MB, int8 1.2MB.
   mà âm thầm train mới bằng cấu hình mặc định** (batch 16, lật ngang 0.5...). Notebook giờ kiểm tra `optimizer is None`
   để bỏ qua thay vì resume.
 
-## Điểm đáng chú ý
-
-- **2 tầng thay vì YOLO 52 lớp**: biển ở xa chỉ ~15px trên ảnh 640px; crop rồi phóng lên 64x64 thì chi tiết
-  (gạch chéo của P.130 vs P.131a, con số trên biển tốc độ) rõ hơn, và lớp hiếm dễ xử lý ở classifier.
-- **Lệch lớp**: P.130 có 765 crop train, 8 lớp dưới 16 crop (ít nhất 2). Thử sampler, loss có trọng số và copy-paste crop lớp hiếm
-  lên ảnh nền khác (giữ nguyên nhãn gốc của ảnh nền).
-- **Không lật ngang ảnh** khi augment: "cấm rẽ trái" lật thành "cấm rẽ phải".
-- **Bỏ phiếu nhiều frame**: trung bình log-xác suất có trọng số theo điểm detector; frame nhoè ít tiếng nói hơn.
-  Phát nhầm sự kiện = trợ lý nói sai luật cho tài xế, nên thà chậm vài trăm ms.
-- **Tracker giữ detection điểm thấp** (ý tưởng ByteTrack): biển bị nhoè do xe rung có score ~0.2,
-  bỏ đi là track đứt và phiếu bầu bị chia nhỏ.
-- **Suy luận tự viết bằng numpy + onnxruntime** (letterbox, decode YOLO11, NMS): không cần ultralytics/torch lúc chạy.
-- **Int8 bằng static quantization có calibration**: với CNN, quantize dynamic gần như không nhanh hơn.
-
-## Chạy
+## Chạy thử
 
 ```bash
-pip install -e ".[infer]"
-# tải models/ từ HF Hub (https://huggingface.co/hgdkakhs/vn-dashcam-vision): detector_1cls(.int8).onnx, signnet(.int8).onnx, names.json
+pip install -e ".[infer]" huggingface_hub
+python -c "from huggingface_hub import snapshot_download; snapshot_download('hgdkakhs/vn-dashcam-vision', allow_patterns=['*.onnx', '*.json'], local_dir='models')"
 pip install -e ".[app]" && streamlit run src/dashcam/app.py
 ```
 
 ```python
 from dashcam.pipeline import SignPipeline
-pipe = SignPipeline.load("models", fps=15)
+pipe = SignPipeline.load("models", fps=15, int8=True)   # int8=False: bản fp32
 for frame in frames:
     for ev in pipe.process(frame).events:
         print(ev.code, ev.conf, ev.t_sec)
 ```
 
-Train lại: `notebooks/01` (detector, T4) → `02` (SignNet) → `03` (quantize + so sánh, CPU) → `04` (video xe máy).
-Chạy trên Colab: mở notebook từ GitHub (File → Open notebook → GitHub → DuongCodeAI/vn-dashcam-vision), chọn T4 GPU
+Test: `pip install -e ".[dev]" && pytest -q` (CI chạy ruff + pytest mỗi lần push).
+
+Train lại trên Colab: `notebooks/01` (detector, T4) → `02` (SignNet) → `03` (quantize + so sánh, CPU) → `04` (video xe máy).
+Mở notebook từ GitHub (File → Open notebook → GitHub → DuongCodeAI/vn-dashcam-vision), chọn T4 GPU
 (03 chạy tiếp trên cùng runtime, chỉ dùng CPU). VNTS tải bằng `kagglehub`, không cần tài khoản Kaggle;
-Secret `HF_TOKEN` (tuỳ chọn) để đẩy model lên HF Hub của bạn.
-Output nằm trong Google Drive (`MyDrive/ai-portfolio/vn-dashcam-vision`) nên chạy lần lượt 01 → 04 là notebook sau tự tìm thấy.
-Quay video thử: [docs/quay_video_xe_may.md](docs/quay_video_xe_may.md).
+Secret `HF_TOKEN` (tuỳ chọn) để đẩy model lên HF Hub của bạn. Output nằm trong Google Drive
+(`MyDrive/ai-portfolio/vn-dashcam-vision`) nên chạy lần lượt 01 → 04 là notebook sau tự tìm thấy.
 
-## Hạn chế
+## Hạn chế và việc tiếp theo
 
+- **Chưa đo trên đường thật nhìn từ xe máy.** VNTS là ảnh dashcam ô tô nên đây là chỗ dễ tụt độ chính xác nhất.
+  Notebook 04 cần video tự quay + gán nhãn ~300-500 frame ([hướng dẫn quay](docs/quay_video_xe_may.md)).
 - VNTS chủ yếu ảnh ban ngày; đêm/mưa phụ thuộc augmentation.
 - imgsz 640 để chạy được trên CPU; biển rất xa có thể bị bỏ sót. 960 sẽ chậm hơn ~2.25 lần (ước theo diện tích ảnh, chưa đo).
-- Ultralytics (dùng để train) là AGPL-3.0.
+- Biển tốc độ P.127 40/60/80 còn nhầm nhau; có thể thêm bước đọc số riêng cho nhóm biển này.
+
+## Cấu trúc
+
+```
+src/dashcam/   prepare_vnts, augment, synth_rare (copy-paste lớp hiếm), classifier (SignNet), train_classifier,
+               yolo_onnx (letterbox/decode/NMS), tracker, voting, pipeline, map_eval, export, app (Streamlit)
+notebooks/     01 detector · 02 SignNet · 03 quantize + benchmark · 04 video xe máy
+results/       số liệu copy từ output notebook
+```
+
+## License
+
+Code: MIT. Dataset VNTS: CC BY-SA 4.0. Ultralytics (chỉ dùng để train detector) là AGPL-3.0; lúc chạy không cần.

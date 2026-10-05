@@ -45,6 +45,6 @@
   với điểm lớp (0..1); quantize chung một scale uint8 thì điểm lớp về 0 → thử với yolo11n ra 0 detection.
 
 ## Việc cần làm
-- Chạy notebook 01-03, điền bảng kết quả.
+- ~~Chạy notebook 01-03, điền bảng kết quả.~~ Xong 04/10/2026 (README, `results/`).
 - Quay + gán nhãn video xe máy (notebook 04).
 - Thử imgsz 960 cho detector 1 lớp nếu recall biển xa thấp.
