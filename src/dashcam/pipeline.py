@@ -52,17 +52,19 @@ class SignPipeline:
         self.frame = 0
 
     @classmethod
-    def load(cls, folder: str | Path, mode: str = "two_stage", threads: int | None = 4, **kw) -> "SignPipeline":
+    def load(cls, folder: str | Path, mode: str = "two_stage", threads: int | None = 4, int8: bool = False,
+             **kw) -> "SignPipeline":
         folder = Path(folder)
+        ext = ".int8.onnx" if int8 else ".onnx"  # int8 nhanh hơn ~17% trên CPU laptop (README)
         names = json.loads((folder / "names.json").read_text("utf-8"))
         display = {}
         if (folder / "display_names.json").exists():
             display = json.loads((folder / "display_names.json").read_text("utf-8"))
         cfg = json.loads((folder / "config.json").read_text("utf-8")) if (folder / "config.json").exists() else {}
         if mode == "two_stage":
-            det = YoloOnnx(str(folder / "detector_1cls.onnx"), imgsz=cfg.get("imgsz", 640), conf=0.15, threads=threads)
-            return cls(det, names, str(folder / "signnet.onnx"), display, threads, **kw)
-        det = YoloOnnx(str(folder / "detector_ncls.onnx"), imgsz=cfg.get("imgsz", 640), conf=0.15, threads=threads)
+            det = YoloOnnx(str(folder / f"detector_1cls{ext}"), imgsz=cfg.get("imgsz", 640), conf=0.15, threads=threads)
+            return cls(det, names, str(folder / f"signnet{ext}"), display, threads, **kw)
+        det = YoloOnnx(str(folder / f"detector_ncls{ext}"), imgsz=cfg.get("imgsz", 640), conf=0.15, threads=threads)
         return cls(det, names, None, display, threads, **kw)
 
     def _classify(self, frame: np.ndarray, boxes: np.ndarray) -> list:
