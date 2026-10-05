@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Nhận diện biển báo giao thông Việt Nam từ camera hành trình (YOLO11n + CNN tự viết), chạy ONNX trên CPU"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
 authors = [{ name = "Tiến Dương", email = "duongcodeai2@gmail.com" }]
 dependencies = ["numpy>=1.26"]
 
@@ -14,7 +15,7 @@ train = ["ultralytics>=8.3", "torch>=2.2", "torchvision", "opencv-python-headles
 dev = ["pytest>=8", "ruff>=0.5"]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
